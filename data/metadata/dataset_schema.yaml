@@ -1,0 +1,203 @@
+# Phase 1B documented schema. Null values are unresolved; see reports/data/dataset_documentation_reconciliation.md.
+dataset:
+  name: IEEE Signal Processing Cup 2015 PPG / TROIKA
+  format: MATLAB 5.0 MAT-file
+  source_repository: https://github.com/zhilinzhang/IEEE-SP-Cup-2015-PPG-Dataset
+  raw_paths:
+    training: data/Training_data
+    competition: data/Competition_data
+  sampling_rate_hz:
+    value: 125
+    status: CONFIRMED_FROM_MULTIPLE_SOURCES
+    sources:
+    - data/Training_data/Readme.pdf p.1
+    - official TestData.zip/TestData/Readme.pdf p.1
+    - CPC paper §2 p.19
+  orientation:
+    value: channels_x_samples
+    status: CONFIRMED_FROM_MULTIPLE_SOURCES
+    sources:
+    - data/Training_data/Readme.pdf p.1
+    - official TestData.zip/TestData/Readme.pdf p.1
+    - reports/data/dataset_status_report.md
+  units:
+    ppg: null
+    acc: null
+    ecg: null
+    status: UNRESOLVED
+  window_seconds:
+    value: 8
+    status: CONFIRMED_FROM_MULTIPLE_SOURCES
+    sources:
+    - data/Training_data/Readme.pdf p.1
+    - official TestData.zip/TestData/Readme.pdf p.2
+    - CPC paper §2 p.19
+  shift_seconds:
+    value: 2
+    status: CONFIRMED_FROM_MULTIPLE_SOURCES
+    sources:
+    - data/Training_data/Readme.pdf p.1
+    - official TestData.zip/TestData/Readme.pdf p.2
+  overlap_seconds:
+    value: 6
+    status: CONFIRMED_FROM_MULTIPLE_SOURCES
+    sources:
+    - data/Training_data/Readme.pdf p.1
+    - official TestData.zip/TestData/Readme.pdf p.2
+    - CPC paper §2 p.19
+  window_samples:
+    value: 1000
+    status: CONFIRMED_FROM_DATASET_DOC
+    source: official TestData.zip/TestData/Readme.pdf p.2
+  shift_samples:
+    value: 250
+    status: CONFIRMED_FROM_DATASET_DOC
+    source: official TestData.zip/TestData/Readme.pdf p.2
+  training:
+    recording_count: 12
+    signal_variable: sig
+    label_variable: BPM0
+    label_role:
+      value: ECG-derived HR ground truth
+      status: CONFIRMED_FROM_MULTIPLE_SOURCES
+      sources:
+      - data/Training_data/Readme.pdf p.1
+      - CPC paper §2 p.19
+    channel_order_1_based:
+      1:
+        signal: ECG
+        status: CONFIRMED_FROM_DATASET_DOC
+        sources: &id001
+        - data/Training_data/Readme.pdf p.1
+        - data/Training_data/Readme.docx
+      2:
+        signal: PPG1
+        status: CONFIRMED_FROM_DATASET_DOC
+        sources: *id001
+      3:
+        signal: PPG2
+        status: CONFIRMED_FROM_DATASET_DOC
+        sources: *id001
+      4:
+        signal: ACC_X
+        status: CONFIRMED_FROM_DATASET_DOC
+        sources: *id001
+      5:
+        signal: ACC_Y
+        status: CONFIRMED_FROM_DATASET_DOC
+        sources: *id001
+      6:
+        signal: ACC_Z
+        status: CONFIRMED_FROM_DATASET_DOC
+        sources: *id001
+    filename_patterns:
+      signal: DATA_XX_TYPEYY.mat
+      label: DATA_XX_TYPEYY_BPMtrace.mat
+  competition:
+    recording_count: 10
+    subject_count: 8
+    signal_variable: sig
+    label_variable: BPM0
+    label_role:
+      value: ground-truth heart rate for TestData
+      status: CONFIRMED_FROM_MULTIPLE_SOURCES
+      sources:
+      - official repository README
+      - official TrueBPM.zip
+      - reports/data/dataset_status_report.md
+    label_ecg_generation:
+      value: null
+      status: UNRESOLVED
+    ecg_available_in_signal_files:
+      value: false
+      status: CONFIRMED_FROM_DATASET_DOC
+      source: official TestData.zip/TestData/Readme.pdf p.1
+    channel_order_1_based:
+      1:
+        signal: PPG1
+        status: CONFIRMED_FROM_DATASET_DOC
+        sources: &id002
+        - official TestData.zip/TestData/Readme.pdf p.1
+        - reports/data/dataset_status_report.md
+      2:
+        signal: PPG2
+        status: CONFIRMED_FROM_DATASET_DOC
+        sources: *id002
+      3:
+        signal: ACC_AXIS_1
+        role_status: CONFIRMED_FROM_DATASET_DOC
+        axis_name: null
+        axis_name_status: UNRESOLVED
+        sources: *id002
+      4:
+        signal: ACC_AXIS_2
+        role_status: CONFIRMED_FROM_DATASET_DOC
+        axis_name: null
+        axis_name_status: UNRESOLVED
+        sources: *id002
+      5:
+        signal: ACC_AXIS_3
+        role_status: CONFIRMED_FROM_DATASET_DOC
+        axis_name: null
+        axis_name_status: UNRESOLVED
+        sources: *id002
+    filename_patterns:
+      signal: TEST_SXX_TYY.mat
+      label: True_SXX_TYY.mat
+replication:
+  primary_set: training
+  primary_set_status: CONFIRMED_FROM_MULTIPLE_SOURCES
+  primary_set_sources:
+  - CPC paper §2, Table 1, §4.3
+  - official repository README
+  - data/Training_data/Readme.pdf
+  primary_files:
+  - data/Training_data/DATA_01_TYPE01.mat
+  - data/Training_data/DATA_02_TYPE02.mat
+  - data/Training_data/DATA_03_TYPE02.mat
+  - data/Training_data/DATA_04_TYPE02.mat
+  - data/Training_data/DATA_05_TYPE02.mat
+  - data/Training_data/DATA_06_TYPE02.mat
+  - data/Training_data/DATA_07_TYPE02.mat
+  - data/Training_data/DATA_08_TYPE02.mat
+  - data/Training_data/DATA_09_TYPE02.mat
+  - data/Training_data/DATA_10_TYPE02.mat
+  - data/Training_data/DATA_11_TYPE02.mat
+  - data/Training_data/DATA_12_TYPE02.mat
+  primary_pairs:
+  - signal_file: data/Training_data/DATA_01_TYPE01.mat
+    label_file: data/Training_data/DATA_01_TYPE01_BPMtrace.mat
+  - signal_file: data/Training_data/DATA_02_TYPE02.mat
+    label_file: data/Training_data/DATA_02_TYPE02_BPMtrace.mat
+  - signal_file: data/Training_data/DATA_03_TYPE02.mat
+    label_file: data/Training_data/DATA_03_TYPE02_BPMtrace.mat
+  - signal_file: data/Training_data/DATA_04_TYPE02.mat
+    label_file: data/Training_data/DATA_04_TYPE02_BPMtrace.mat
+  - signal_file: data/Training_data/DATA_05_TYPE02.mat
+    label_file: data/Training_data/DATA_05_TYPE02_BPMtrace.mat
+  - signal_file: data/Training_data/DATA_06_TYPE02.mat
+    label_file: data/Training_data/DATA_06_TYPE02_BPMtrace.mat
+  - signal_file: data/Training_data/DATA_07_TYPE02.mat
+    label_file: data/Training_data/DATA_07_TYPE02_BPMtrace.mat
+  - signal_file: data/Training_data/DATA_08_TYPE02.mat
+    label_file: data/Training_data/DATA_08_TYPE02_BPMtrace.mat
+  - signal_file: data/Training_data/DATA_09_TYPE02.mat
+    label_file: data/Training_data/DATA_09_TYPE02_BPMtrace.mat
+  - signal_file: data/Training_data/DATA_10_TYPE02.mat
+    label_file: data/Training_data/DATA_10_TYPE02_BPMtrace.mat
+  - signal_file: data/Training_data/DATA_11_TYPE02.mat
+    label_file: data/Training_data/DATA_11_TYPE02_BPMtrace.mat
+  - signal_file: data/Training_data/DATA_12_TYPE02.mat
+    label_file: data/Training_data/DATA_12_TYPE02_BPMtrace.mat
+  competition_in_primary_set: false
+  include_all_labelled_windows:
+    value: true
+    status: CONFIRMED_FROM_CPC_PAPER
+    source: CPC paper §4.3 p.22
+  source_paper:
+    path: docs/Healthcare Tech Letters - 2018 - Islam - Cascade and parallel combination  CPC  of
+      adaptive filters for estimating heart.pdf
+    doi: 10.1049/htl.2017.0027
+  table1_subject_to_filename_crosswalk:
+    value: null
+    status: UNRESOLVED

@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Keep the original MATLAB dataset outside version control.
+data/**/*.mat
+
+# Generated outputs.
+results/*
+!results/.gitkeep

@@ -1,0 +1,10 @@
+[project]
+name = "cpc-ppg-replication"
+version = "0.1.0"
+description = "Replication of CPC adaptive filtering for PPG heart-rate estimation"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+markers = ["integration: validates the local Training dataset (skips only when absent)"]

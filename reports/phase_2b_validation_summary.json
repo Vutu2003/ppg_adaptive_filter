@@ -1,0 +1,112 @@
+{
+  "training_records": 12,
+  "input_windows": 1768,
+  "preprocessed_windows": 1768,
+  "window_count_mismatches": 0,
+  "shape_failures": 0,
+  "finite_output_failures": 0,
+  "ppg_average_failures": 0,
+  "out_of_band_spectral_failures": 0,
+  "raw_integrity_failures": 0,
+  "alignment_failures": 0,
+  "other_failures": 0,
+  "overall_status": "PASS",
+  "records": [
+    {
+      "record_id": "DATA_01_TYPE01",
+      "input_windows": 148,
+      "preprocessed_windows": 148,
+      "status": "PASS"
+    },
+    {
+      "record_id": "DATA_02_TYPE02",
+      "input_windows": 148,
+      "preprocessed_windows": 148,
+      "status": "PASS"
+    },
+    {
+      "record_id": "DATA_03_TYPE02",
+      "input_windows": 140,
+      "preprocessed_windows": 140,
+      "status": "PASS"
+    },
+    {
+      "record_id": "DATA_04_TYPE02",
+      "input_windows": 146,
+      "preprocessed_windows": 146,
+      "status": "PASS"
+    },
+    {
+      "record_id": "DATA_05_TYPE02",
+      "input_windows": 146,
+      "preprocessed_windows": 146,
+      "status": "PASS"
+    },
+    {
+      "record_id": "DATA_06_TYPE02",
+      "input_windows": 150,
+      "preprocessed_windows": 150,
+      "status": "PASS"
+    },
+    {
+      "record_id": "DATA_07_TYPE02",
+      "input_windows": 143,
+      "preprocessed_windows": 143,
+      "status": "PASS"
+    },
+    {
+      "record_id": "DATA_08_TYPE02",
+      "input_windows": 160,
+      "preprocessed_windows": 160,
+      "status": "PASS"
+    },
+    {
+      "record_id": "DATA_09_TYPE02",
+      "input_windows": 149,
+      "preprocessed_windows": 149,
+      "status": "PASS"
+    },
+    {
+      "record_id": "DATA_10_TYPE02",
+      "input_windows": 149,
+      "preprocessed_windows": 149,
+      "status": "PASS"
+    },
+    {
+      "record_id": "DATA_11_TYPE02",
+      "input_windows": 143,
+      "preprocessed_windows": 143,
+      "status": "PASS"
+    },
+    {
+      "record_id": "DATA_12_TYPE02",
+      "input_windows": 146,
+      "preprocessed_windows": 146,
+      "status": "PASS"
+    }
+  ],
+  "fs": 125,
+  "window_samples": 1000,
+  "fft_length": 1000,
+  "bin_spacing_hz": 0.125,
+  "requested_passband_hz": [
+    0.4,
+    3.5
+  ],
+  "first_retained_hz": 0.5,
+  "last_retained_hz": 3.5,
+  "retained_rfft_bins": 25,
+  "spectra_checked": 8840,
+  "max_relative_out_of_band": 3.260181689167031e-16,
+  "max_out_of_band_energy_fraction": 1.6077286174373568e-31,
+  "figures": [
+    "reports/figures/phase_2b/A_ppg1_raw_filtered_spectrum.png",
+    "reports/figures/phase_2b/B_ppg2_raw_filtered_spectrum.png",
+    "reports/figures/phase_2b/C_filtered_ppg_average_spectrum.png",
+    "reports/figures/phase_2b/D_filtered_acc_spectra.png"
+  ],
+  "representative": {
+    "record_id": "DATA_01_TYPE01",
+    "index": 0
+  }
+}

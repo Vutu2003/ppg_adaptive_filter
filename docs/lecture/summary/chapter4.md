@@ -523,7 +523,184 @@ Hai nhánh nhận **cùng PPG và ACC đã tiền xử lý**. Mỗi tầng học
 
 ---
 
-## 12. Các câu hỏi phản biện quan trọng
+## 12. Luồng dữ liệu CPC — Phần trình bày chính khi báo cáo
+
+**Ý chính:** ACC cho biết chuyển động; các bộ lọc học cách biến ACC thành nhiễu PPG ước lượng. Mỗi tầng trừ phần nhiễu học được, hai nhánh kết hợp tín hiệu còn lại, rồi mới ước lượng BPM.
+
+### 12.1. Sơ đồ từ dữ liệu đo đến kết quả
+
+```mermaid
+flowchart TB
+    RAW["PPG1, PPG2 và ACC-X/Y/Z · 125 Hz"] --> WIN["Cắt đồng bộ: 1.000 mẫu/kênh · dịch 250 mẫu"]
+    WIN --> PRE["Lọc riêng từng kênh: FFT → giữ 0.4–3.5 Hz → IFFT"]
+    PRE --> D["Trung bình 2 PPG → d · 1.000 mẫu"]
+    PRE --> A["ACC-X, ACC-Y, ACC-Z · mỗi trục 1.000 mẫu"]
+    D --> L["Nhánh LMS: ANC-X → ANC-Y → ANC-Z"]
+    D --> R["Nhánh RLS: ANC-X → ANC-Y → ANC-Z"]
+    A --> L
+    A --> R
+    L -->|"e_LMS · 1.000 mẫu"| MIX["Trộn từng mẫu: 0.5 e_LMS + 0.5 e_RLS"]
+    R -->|"e_RLS · 1.000 mẫu"| MIX
+    MIX --> FFT["Đệm 0 → FFT 4.096 điểm → tìm đỉnh → BPM thô"]
+    FFT --> OUT["Làm trơn → một giá trị BPM/cửa sổ"]
+    OUT --> EVAL["So sánh BPM tham chiếu để đánh giá"]
+    GT["Nhãn BPM tham chiếu từ ECG"] -.-> EVAL
+```
+
+**Ba cấp dữ liệu cần phân biệt:** mẫu tín hiệu → cửa sổ 8 giây → chuỗi BPM theo thời gian. Ký hiệu $n=0,\ldots,999$ chỉ mẫu trong một cửa sổ; $m=0,1,\ldots$ chỉ cửa sổ của bản ghi.
+
+### 12.2. Cắt cửa sổ và tiền xử lý: tạo đầu vào cho ANC
+
+Tại $F_s=125$ Hz, mỗi cửa sổ chứa **1.000 mẫu = 8 giây** trên cả năm kênh. Các kênh được cắt cùng vị trí để giữ đồng bộ:
+
+| Cửa sổ $m$ | Khoảng mẫu, gồm đầu và không gồm cuối | Khoảng thời gian |
+| -------------- | ---------------------------------------------- | ------------------ |
+| 0              | $[0,1000)$                                   | $[0,8)$ s        |
+| 1              | $[250,1250)$                                 | $[2,10)$ s       |
+| 2              | $[500,1500)$                                 | $[4,12)$ s       |
+
+Cửa sổ dịch 250 mẫu nên hai cửa sổ kề nhau chồng **750 mẫu = 6 giây**. Đoạn cuối không đủ 1.000 mẫu không được tạo thành cửa sổ.
+
+Trong **từng cửa sổ**, lọc riêng PPG1, PPG2 và ba trục ACC bằng FFT 1.000 điểm: đưa các bin ngoài dải 0.4–3.5 Hz về 0 rồi IFFT. Sau đó mới lấy trung bình hai PPG đã lọc:
+
+$$
+d[n]=\frac{\mathrm{PPG}_{1,f}[n]+\mathrm{PPG}_{2,f}[n]}{2}.
+$$
+
+Ký hiệu $f$ ở chỉ số dưới biểu thị tín hiệu **đã lọc**, không phải hệ số quên RLS. Đầu ra tiền xử lý là **bốn chuỗi 1.000 mẫu**: $d[n]$ và $x_X[n],x_Y[n],x_Z[n]$. Hai nhánh LMS/RLS nhận cùng bốn chuỗi này.
+
+**Vì sao vẫn cần ANC?** Lọc dải loại thành phần ngoài dải, nhưng nhiễu chuyển động có thể nằm ngay trong dải nhịp tim. ANC khai thác thêm thông tin ACC để ước lượng phần nhiễu đó. Việc xử lý ở đây theo khối 8 giây; không đồng nghĩa toàn bộ pipeline chạy tức thời từng mẫu.
+
+### 12.3. Bên trong một tầng ANC: lọc trước, cập nhật sau
+
+**ANC (Adaptive Noise Cancellation) là cấu trúc khử nhiễu; LMS/RLS là thuật toán học hệ số bên trong cấu trúc đó.** Ở một tầng, gọi ACC tham chiếu là $x[n]$ và tín hiệu cần khử nhiễu là $d[n]$.
+
+| Bước tại mẫu $n$           | Tính toán                                                                            | Ý nghĩa                                                                                   |
+| -------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| 1. Gom mẫu ACC                  | $\mathbf{x}[n]=[x[n],x[n-1],\ldots,x[n-M+1]]^T$                                      | Tạo vector $M$ mẫu hiện tại/quá khứ; đầu cửa sổ thiếu lịch sử thì điền 0. |
+| 2. Lọc bằng hệ số hiện tại | $y[n]=\mathbf{w}^T[n]\mathbf{x}[n]$                                                  | Tạo **một mẫu nhiễu ước lượng** từ ACC.                                      |
+| 3. Trừ khỏi đầu vào chính  | $e[n]=d[n]-y[n]$                                                                     | Tạo **một mẫu tín hiệu dư** để giữ lại.                                     |
+| 4. Học từ sai số              | LMS hoặc RLS cập nhật $\mathbf{w}[n+1]$; RLS cập nhật thêm $\mathbf{P}[n+1]$ | Trạng thái mới dùng cho mẫu tiếp theo, không tính lại $y[n]$ vừa xuất.         |
+
+Phép nhân vector ở bước 2 là tổng có trọng số:
+
+$$
+y[n]=\sum_{k=0}^{M-1}w_k[n]x[n-k].
+$$
+
+Đây là dạng tính đầu ra FIR. Nếu giữ cố định các hệ số, nó là tích chập với đáp ứng xung $h[k]=w_k$. Trong LMS/RLS, hệ số thay đổi theo $n$ nên không có một đáp ứng xung cố định cho toàn bộ quá trình. Chỉ số $k$ biểu diễn **độ trễ**, còn $n$ biểu diễn **thời điểm cập nhật**.
+
+Trong ANC, $d[n]$ là đầu vào chính chứa tín hiệu cần giữ và nhiễu, **không phải PPG sạch có sẵn để huấn luyện**. Bộ lọc dựa vào tương quan ACC–nhiễu: nếu $y[n]$ gần với nhiễu thì $e[n]$ gần với PPG sạch. Sai số bình phương là đại lượng tối ưu; không kỳ vọng $e[n]=0$ vì nhịp tim vẫn cần nằm trong tín hiệu dư.
+
+### 12.4. LMS và RLS thay đổi bước học hệ số như thế nào?
+
+Hai thuật toán dùng chung các bước tạo vector, tính $y[n]$ và lấy $e[n]$. Khác biệt nằm ở **bước cập nhật**:
+
+|                           | Một tầng LMS                                                           | Một tầng RLS                                                                                                                     |
+| ------------------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Bộ nhớ ACC tức thời   | $M=27$ mẫu, từ $x[n]$ đến $x[n-26]$                            | $M=55$ mẫu, từ $x[n]$ đến $x[n-54]$                                                                                      |
+| Trạng thái học         | Vector $\mathbf{w}$ có 27 hệ số                                     | Vector $\mathbf{w}$ có 55 hệ số và ma trận $\mathbf{P}$ kích thước $55\times55$                                      |
+| Cập nhật trọng số     | $\mathbf{w}[n+1]=\mathbf{w}[n]+0.0001\,e[n]\mathbf{x}[n]$              | Tính gain $\mathbf{k}[n]$ từ $\mathbf{P}[n],\mathbf{x}[n],f=0.999$; rồi $\mathbf{w}[n+1]=\mathbf{w}[n]+\mathbf{k}[n]e[n]$ |
+| Cách dùng dữ liệu cũ | Ảnh hưởng được giữ gián tiếp trong các hệ số đã cập nhật | Tích lũy thông tin tương quan trong $\mathbf{P}$; trọng số quan sát cũ suy giảm theo $f^\ell$                        |
+
+Công thức gain và cập nhật $\mathbf{P}$ ở mục 9. **27/55 là số hệ số mỗi tầng, không phải số vòng lặp:** mỗi tầng vẫn xử lý đủ 1.000 mẫu. Vector ACC chỉ chứa 27/55 mẫu gần nhất, nhưng trạng thái đã học còn mang ảnh hưởng từ các mẫu trước đó trong cửa sổ.
+
+**Ví dụ một bước để giải thích bằng lời** — chỉ minh họa, không phải cấu hình hay số liệu thực nghiệm của đồ án: với $M=3$, $\mathbf{w}=[0.5,0.3,0.2]^T$, $\mathbf{x}=[2,1,0]^T$ và $d=3$:
+
+$$
+y=0.5\times2+0.3\times1+0.2\times0=1.3,
+\qquad e=3-1.3=1.7.
+$$
+
+Nếu dùng LMS với $\mu=0.0001$, bộ hệ số mới là $[0.50034,0.30017,0.2]^T$. **Đầu ra mẫu hiện tại vẫn là $e=1.7$**; hệ số mới dành cho mẫu kế tiếp. Đây là quá trình “ước lượng nhiễu → trừ → học lại”.
+
+### 12.5. Ba tầng nối tiếp: tín hiệu nào được chuyển sang tầng sau?
+
+Gọi $b\in\{L,R\}$ là nhánh LMS/RLS, $a\in\{X,Y,Z\}$ là trục ACC. Mỗi tầng có bộ hệ số riêng $\mathbf{w}_{b,a}$ và tạo nhiễu ước lượng $y_{b,a}$:
+
+| Tầng trong nhánh $b$ | Đầu vào chính          | ACC tham chiếu | Đầu ra chuyển tiếp      |
+| ------------------------ | -------------------------- | --------------- | --------------------------- |
+| X                        | PPG tiền xử lý $d$    | ACC-X           | $e_{b,X}=d-y_{b,X}$       |
+| Y                        | Tín hiệu dư $e_{b,X}$ | ACC-Y           | $e_{b,Y}=e_{b,X}-y_{b,Y}$ |
+| Z                        | Tín hiệu dư $e_{b,Y}$ | ACC-Z           | $e_{b,Z}=e_{b,Y}-y_{b,Z}$ |
+
+Mỗi ô tín hiệu trong bảng là **cả chuỗi 1.000 mẫu**. Trong code, một tầng xử lý xong cửa sổ mới chuyển chuỗi sai số sang tầng kế tiếp. Sau tầng Z:
+
+$$
+e_{\mathrm{LMS}}=e_{L,Z},\qquad
+e_{\mathrm{RLS}}=e_{R,Z}.
+$$
+
+**Điểm phải nói rõ khi chỉ sơ đồ:** chuyển $e$, tức PPG còn lại sau phép trừ, sang tầng sau. $y$ là nhiễu ước lượng của tầng hiện tại. Không lấy ACC-X làm đầu vào chính của tầng Y, không truyền bộ hệ số tầng X sang tầng Y, và không nối đầu ra LMS sang RLS.
+
+Ba tầng xử lý lần lượt phần nhiễu còn liên hệ với từng trục; không giả định nhiễu chia thành ba phần độc lập hay mỗi tầng luôn làm kết quả tốt hơn. Hai nhánh là song song **về kiến trúc**; mã hiện tại gọi nhánh LMS rồi nhánh RLS trên cùng dữ liệu.
+
+### 12.6. Kết hợp hai nhánh: trộn tín hiệu trước khi tìm BPM
+
+Hai chuỗi đầu ra cùng cửa sổ và cùng vị trí mẫu được kết hợp:
+
+$$
+e_{\mathrm{CPC}}[n]
+=0.5e_{\mathrm{LMS}}[n]+0.5e_{\mathrm{RLS}}[n],
+\qquad n=0,\ldots,999.
+$$
+
+Sau phép trộn vẫn là **một chuỗi 1.000 mẫu**, chưa phải BPM. Ví dụ tại một vị trí mẫu, hai nhánh cho 1.2 và 0.8 thì CPC cho 1.0. Đây là trung bình **biên độ tín hiệu từng mẫu**, không phải lấy trung bình hai giá trị BPM hoặc hai bộ hệ số.
+
+Trọng số $\lambda_{\mathrm{CPC}}=0.5$ được giữ cố định trong cấu hình chính; không có bước học trọng số trộn từ nhãn. Hai nhánh có thể tạo phần nhiễu dư khác nhau, nhưng hiệu quả kết hợp phải được kiểm tra bằng kết quả thực nghiệm.
+
+### 12.7. Từ chuỗi CPC đến một giá trị BPM
+
+**Bước 1 — Tạo phổ:** đệm thêm 3.096 số 0 vào chuỗi CPC 1.000 mẫu để tính FFT 4.096 điểm; lấy bình phương biên độ phổ làm đại lượng tìm đỉnh. Không kéo dài thời gian đo thực tế.
+
+**Bước 2 — Chọn đỉnh:** cửa sổ đầu chọn đỉnh lớn nhất trong 0.4–3.5 Hz. Từ cửa sổ sau, chỉ tìm trong vùng **±10 bin quanh bin đã chọn ở cửa sổ trước**, đồng thời vẫn nằm trong dải trên. Bộ theo dõi dùng bin đỉnh trước đó, không dùng BPM tham chiếu hay BPM đã làm trơn.
+
+**Bước 3 — Đổi sang BPM:** với bin $k_m$ đánh số từ 0 và $B_m$ là BPM thô của cửa sổ $m$:
+
+$$
+f_{\mathrm{peak},m}=\frac{k_mF_s}{4096},
+\qquad
+B_m=60\frac{k_mF_s}{4096}.
+$$
+
+Ví dụ $k_m=49$ cho khoảng **89.722 BPM**. Bước lưới BPM là $60\times125/4096\approx1.831$ BPM/bin, nhỏ hơn 7.5 BPM/bin khi FFT 1.000 điểm: có thể giảm sai số rời rạc hóa khi chọn đỉnh, nhưng không thêm thông tin đo hoặc bảo đảm giảm mọi loại sai số.
+
+**Bước 4 — Làm trơn:** từ cửa sổ thứ ba, tính
+
+$$
+\widehat{B}_m=0.90B_m+0.05B_{m-1}+0.05B_{m-2}.
+$$
+
+Hai cửa sổ đầu giữ nguyên. Các giá trị bên phải đều là **BPM thô**, không hồi tiếp BPM đã làm trơn. Kết quả chính là một BPM mỗi cửa sổ, tức cập nhật theo bước 2 giây. Chế độ hiệu chỉnh offline bổ sung không được bật trong cấu hình mặc định.
+
+**Phân biệt hai lần FFT:** FFT **1.000 điểm + IFFT** ở đầu để lọc dải từng kênh; FFT **4.096 điểm** ở cuối để tìm tần số nhịp tim từ đầu ra CPC.
+
+### 12.8. Cái gì được nhớ khi chuyển cửa sổ?
+
+| Thành phần                                  | Trong một cửa sổ                    | Sang cửa sổ kế tiếp                                                   |
+| --------------------------------------------- | -------------------------------------- | ------------------------------------------------------------------------- |
+| Hệ số LMS/RLS và lịch sử ACC từng tầng | Cập nhật liên tục qua 1.000 mẫu   | Khởi tạo lại bằng 0, dù hai cửa sổ có phần dữ liệu chồng nhau |
+| Ma trận RLS $\mathbf{P}$ từng tầng       | Cập nhật theo từng mẫu             | Khởi tạo lại bằng $I_{55}$                                          |
+| Theo dõi đỉnh phổ                         | Chọn một bin cho cửa sổ hiện tại | Giữ bin để giới hạn vùng tìm kiếm cửa sổ sau                    |
+| Lịch sử BPM thô                            | Tạo một giá trị $B_m$            | Giữ hai giá trị gần nhất để làm trơn                             |
+
+Khi bắt đầu **bản ghi mới**, cả theo dõi đỉnh và lịch sử BPM cũng được khởi tạo lại. Nhãn BPM từ ECG chỉ dùng so sánh với ước lượng để đánh giá; không đi vào phép lọc, cập nhật trọng số hay tìm đỉnh. Các quy ước tái dựng ở mục 11.4 vẫn áp dụng cho luồng này.
+
+### 12.9. Lời dẫn ngắn khi chỉ vào sơ đồ
+
+> “Đầu vào gồm hai kênh PPG và ba trục gia tốc được đo đồng bộ ở 125 Hz. Em chia dữ liệu thành cửa sổ 8 giây, dịch 2 giây; lọc dải từng kênh rồi lấy trung bình hai PPG.
+>
+> PPG này đi vào hai nhánh LMS và RLS. Mỗi nhánh có ba tầng ANC ứng với ACC-X, Y và Z. Trong một tầng, bộ lọc kết hợp các mẫu ACC hiện tại và quá khứ để tạo nhiễu ước lượng y. Em trừ y khỏi đầu vào chính để lấy tín hiệu dư e, rồi dùng e và ACC để cập nhật hệ số cho mẫu tiếp theo. LMS dùng bước học cố định; RLS tính độ lợi dựa trên thông tin tương quan đã tích lũy.
+>
+> Tín hiệu e của tầng trước đi vào tầng sau; mỗi tầng có bộ hệ số riêng. Sau tầng Z, em trộn hai chuỗi tín hiệu dư với trọng số 0.5 và 0.5. Sau đó mới tính phổ 4.096 điểm, theo dõi đỉnh và đổi tần số sang BPM, rồi làm trơn.
+>
+> Bộ lọc được khởi tạo lại mỗi cửa sổ; bộ theo dõi giữ đỉnh phổ trước đó trong cùng bản ghi. BPM tham chiếu từ ECG chỉ dùng đánh giá, không dùng để dạy bộ lọc.”
+
+**Đường dẫn khi cần mở code minh họa:** [cắt cửa sổ](../../../src/cpc_ppg/data/segmentation.py) → [tiền xử lý](../../../src/cpc_ppg/preprocessing/pipeline.py) → [LMS](../../../src/cpc_ppg/adaptive_filters/lms.py) / [RLS](../../../src/cpc_ppg/adaptive_filters/rls.py) → [nối ba tầng](../../../src/cpc_ppg/adaptive_filters/cascade.py) → [trộn hai nhánh](../../../src/cpc_ppg/adaptive_filters/cpc.py) → [ước lượng BPM](../../../src/cpc_ppg/hr/pipeline.py).
+
+---
+
+## 13. Các câu hỏi phản biện quan trọng
 
 ### Câu 1. Bộ lọc thích nghi khác bộ lọc cố định thế nào?
 
@@ -563,7 +740,7 @@ Theo cách diễn giải RLS của project, f điều chỉnh trọng số dữ 
 
 ---
 
-## 13. Checklist trước khi bảo vệ
+## 14. Checklist trước khi bảo vệ
 
 - [ ] Giải thích được nguyên lý lọc thích nghi.
 - [ ] Phân biệt y[n] và e[n].
@@ -577,6 +754,8 @@ Theo cách diễn giải RLS của project, f điều chỉnh trọng số dữ 
 - [ ] Hiểu vai trò mu và forgetting factor.
 - [ ] So sánh được độ phức tạp LMS/RLS.
 - [ ] Giải thích được hai nhánh LMS/RLS trong CPC.
+- [ ] Trình bày được luồng mẫu → cửa sổ → BPM và phân biệt FFT tiền xử lý/FFT tìm đỉnh.
+- [ ] Chỉ được tín hiệu chuyển giữa các tầng và trạng thái được giữ/reset giữa các cửa sổ.
 
 **Ưu tiên ôn:**
 
@@ -593,4 +772,4 @@ Theo cách diễn giải RLS của project, f điều chỉnh trọng số dữ 
 
 - Slide 3–40: Nguyên lý, thống kê tín hiệu, Wiener, dự đoán tuyến tính và Steepest Descent.
 - Slide 41: LMS/NLMS và RLS được giao tự đọc.
-- Mục 8–11 và các cấu hình CPC: Kiến thức bổ sung từ đồ án và lý thuyết thuật toán, không phải nội dung công thức chi tiết được trình bày trong lecture.
+- Mục 8–12 và các cấu hình CPC: Kiến thức bổ sung từ đồ án và lý thuyết thuật toán, không phải nội dung công thức chi tiết được trình bày trong lecture.

@@ -2,7 +2,7 @@
 
 from .models import TrainingRecord, TrainingWindow
 from .protocol import CHANNEL_NAMES, HOP_SAMPLES, WINDOW_SAMPLES
-from .validation import validate_training_record
+from ._checks import validate_training_record
 
 
 def segment_training_record(record: TrainingRecord) -> list[TrainingWindow]:

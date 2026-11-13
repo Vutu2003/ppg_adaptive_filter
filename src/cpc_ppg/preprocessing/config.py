@@ -1,4 +1,4 @@
-"""Explicit Phase 2B reconstruction; FFT details are not author-confirmed."""
+"""Per-window spectral preprocessing; FFT details are not author-confirmed."""
 
 from dataclasses import dataclass
 from numbers import Integral, Real
@@ -27,7 +27,7 @@ def _validate_band(fs: float, low_hz: float, high_hz: float) -> None:
 class PreprocessingConfig:
     """Per-window baseline options, all explicit and unsupported modes rejected.
 
-    Fs comes from Phase 2A. Per-window rFFT/irFFT, L=1000, inclusive bounds,
+    Fs follows the Training data protocol. Per-window rFFT/irFFT, L=1000, inclusive bounds,
     no padding/detrend/taper are RECONSTRUCTION-ASSUMPTION choices. The default
     requested band is PAPER-SPECIFIED; a different valid band is an explicit
     alternative configuration, not the replication baseline.
@@ -48,7 +48,7 @@ class PreprocessingConfig:
         if (self.fs != FS or isinstance(self.fft_length, bool)
                 or not isinstance(self.fft_length, Integral) or self.fft_length != WINDOW_SAMPLES):
             raise ValueError(
-                f"Phase 2B Training baseline expects fs={FS}, fft_length={WINDOW_SAMPLES}; "
+                f"Training preprocessing expects fs={FS}, fft_length={WINDOW_SAMPLES}; "
                 f"observed fs={self.fs}, fft_length={self.fft_length}"
             )
         if (self.fft_mode != "per_window" or self.zero_padding is not False

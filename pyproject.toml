@@ -1,10 +1,13 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "cpc-ppg-replication"
 version = "0.1.0"
-description = "Replication of CPC adaptive filtering for PPG heart-rate estimation"
+description = "LMS/RLS adaptive filtering and CPC heart-rate estimation from PPG"
 requires-python = ">=3.12"
+dependencies = ["numpy==2.5.3", "scipy==1.18.1"]
 
-[tool.pytest.ini_options]
-pythonpath = ["src"]
-testpaths = ["tests"]
-markers = ["integration: validates the local Training dataset (skips only when absent)"]
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -9,7 +9,7 @@ from .discovery import discover_training_pairs, parse_training_filename
 from .errors import DatasetValidationError, PairingError
 from .models import NumericArray, TrainingRecord
 from .protocol import CHANNEL_NAMES, EXPECTED_TRAINING_RECORDS, FS
-from .validation import validate_numeric_array, validate_training_record
+from ._checks import validate_numeric_array, validate_training_record
 
 
 def _read_variable(path: Path, variable: str, record_id: str) -> NumericArray:
@@ -31,7 +31,7 @@ def load_training_record(signal_path: str | Path, label_path: str | Path) -> Tra
 
     Require sig=(6,N), BPM0 as a vector, finite real data and exact 1000/250
     window alignment. Exposed arrays are read-only views; copy explicitly if
-    later phases need writable buffers. Current MAT v5 files use scipy.io.loadmat.
+    the caller needs writable buffers. Current MAT v5 files use scipy.io.loadmat.
     """
     signal_path, label_path = Path(signal_path), Path(label_path)
     signal_id = parse_training_filename(signal_path)

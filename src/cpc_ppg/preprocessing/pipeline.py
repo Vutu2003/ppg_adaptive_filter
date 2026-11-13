@@ -56,5 +56,5 @@ def preprocess_window(
 def preprocess_record(
     record: TrainingRecord, config: PreprocessingConfig = PreprocessingConfig(),
 ) -> list[PreprocessedWindow]:
-    """Use Phase 2A segmentation and independently preprocess every full window."""
+    """Segment the recording and independently preprocess every full window."""
     return [preprocess_window(window, config) for window in segment_training_record(record)]

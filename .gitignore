@@ -1,12 +1,32 @@
+# Local Python environment and caches.
 .venv/
+venv/
 __pycache__/
 *.py[cod]
+*.egg-info/
 .pytest_cache/
+.ruff_cache/
+.mypy_cache/
 .ipynb_checkpoints/
+.coverage*
+htmlcov/
+build/
+dist/
 
-# Keep the original MATLAB dataset outside version control.
+# Local editor, agent and credential files.
+.idea/
+.vscode/
+.agents/
+.codex/
+.aws/
+.env
+.env.*
+!.env.example
+.DS_Store
+Thumbs.db
+~$*
+.~lock.*
 
-
-# Generated outputs.
-results/*
-!results/.gitkeep
+# Generated experiments stay outside the source repository.
+results/
+outputs/

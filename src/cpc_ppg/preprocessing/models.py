@@ -1,4 +1,4 @@
-"""Preprocessing output separate from raw Phase 2A objects."""
+"""Preprocessed signals kept separate from raw Training windows."""
 
 from dataclasses import dataclass
 

@@ -28,14 +28,14 @@ def spectral_bandpass(
     read-only real float64 array. This rFFT reconstruction is an explicit
     baseline assumption, not a claim about the authors' FFT implementation.
     The general primitive accepts any nonempty length; the Training pipeline
-    requires exactly the Phase 2A 1000-sample windows.
+    requires exactly 1000 samples per window.
     """
     _validate_signal(signal)
     _validate_band(fs, low_hz, high_hz)
     length = signal.size
     frequencies = np.fft.rfftfreq(length, d=1 / fs)
     mask = (frequencies >= low_hz) & (frequencies <= high_hz)
-    # Explicit promotion makes numerical validation use one known precision.
+    # Use float64 consistently for the spectral computation.
     with np.errstate(over="ignore", invalid="ignore"):
         coefficients = np.fft.rfft(np.asarray(signal, dtype=np.float64), n=length)
         if not np.isfinite(coefficients).all():

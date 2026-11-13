@@ -181,3 +181,73 @@ Các kết quả này hỗ trợ lợi ích của **phối hợp hai chuỗi đ�
 ### 8.4. Câu trả lời ngắn khi bảo vệ
 
 > Ba tầng tương ứng với ba trục gia tốc. Mỗi tầng ANC dùng một trục để ước lượng nhiễu và truyền phần PPG còn lại cho tầng sau. Hai chuỗi LMS và RLS chạy song song vì có cách thích nghi khác nhau; phối hợp đầu ra giúp giảm phụ thuộc vào hạn chế của từng thuật toán. Trong paper, CPC đạt AAE trung bình thấp hơn hai chuỗi riêng. Đây là lựa chọn thiết kế có thực nghiệm hỗ trợ, chưa phải bằng chứng rằng cấu trúc này tối ưu trong mọi trường hợp.
+
+## 9. Lựa chọn tham số trong đồ án
+
+**Nguyên tắc:** giữ cấu hình công bố để đối chiếu paper; những chi tiết chưa được mô tả đủ phải được chốt thành quy ước triển khai. Giá trị dưới đây đối chiếu với mã hiện tại; phần giải thích nêu ý nghĩa và đánh đổi, không khẳng định chúng đã được tối ưu.
+
+### 9.1. Dữ liệu và tiền xử lý
+
+| Tham số | Giá trị đồ án | Vì sao dùng / ý nghĩa |
+|---|---|---|
+| Tần số lấy mẫu $F_s$ | **125 Hz** | Theo dữ liệu và mục 2 của paper; dùng để đổi mẫu sang thời gian, tần số sang BPM. |
+| Cửa sổ / bước dịch | **8 s / 2 s**, chồng lấn **6 s** | Theo giao thức paper; mỗi cửa sổ có **1.000 mẫu**, mỗi bước dịch **250 mẫu**, ghép với một nhãn BPM0. |
+| Dải lọc PPG và ACC | **0,4–3,5 Hz** | Theo mục 3.1; giữ dải quan tâm. Nhiễu nằm trong dải vẫn cần ANC xử lý. |
+| FFT tiền xử lý | **1.000 điểm**, riêng từng cửa sổ | Quy ước đồ án: bỏ hệ số phổ ngoài dải rồi biến đổi ngược; không đệm thêm số 0, không thêm hàm cửa sổ phổ. |
+
+Hai PPG được lọc riêng rồi lấy trung bình theo mục 3.1. [Cấu hình tiền xử lý](../../../src/cpc_ppg/preprocessing/config.py) và [giao thức chia cửa sổ](../../../src/cpc_ppg/data/protocol.py) quy định các giá trị này.
+
+### 9.2. LMS, RLS và trọng số phối hợp
+
+Trong mục này, **$M$ là số hệ số FIR trong mã**; cần phân biệt với ký hiệu **order $l_i$** của paper.
+
+| Tham số | Giá trị đồ án | Vì sao dùng / tác động |
+|---|---|---|
+| Bước cập nhật LMS $\mu$ | **0.0001** | Giữ giá trị paper. $\mu$ nhân với $e[n]\mathbf u[n]$, điều khiển độ lớn bước thay đổi hệ số. |
+| Số hệ số LMS / RLS | **27 / 55** mỗi tầng | Giữ hai con số công bố; đồ án hiểu là số hệ số, tương ứng bậc FIR **26 / 54**. Cách đếm này là quy ước tái hiện. |
+| Hệ số quên RLS $f$ | **0.999** | Diễn giải con số paper bằng RLS có hệ số quên. Trọng số mẫu cũ giảm theo $f^k$ sau $k$ bước; $f$ gần 1 làm quên chậm. |
+| Trọng số CPC $\lambda$ | **0.5** | Theo cấu hình chính của paper: hai đầu ra đóng góp **50/50**, giữ cố định trên mọi cửa sổ. |
+
+**Vì sao đúng các con số này?** Mục tiêu ban đầu là tái hiện cấu hình paper. Chưa có cơ sở để gọi 27/55, $\mu=0.0001$ hoặc $f=0.999$ là tối ưu cho dữ liệu khác. Riêng tính ổn định của LMS còn phụ thuộc biên độ và tương quan ACC; bước cập nhật nhỏ không tự bảo đảm hội tụ.
+
+Đối chiếu [cấu hình bộ lọc](../../../src/cpc_ppg/adaptive_filters/config.py) và [cấu hình CPC](../../../src/cpc_ppg/adaptive_filters/cpc.py). Cách diễn giải “step size” của RLS được phân biệt ở mục 6.
+
+### 9.3. Các quy ước khởi tạo và trạng thái
+
+| Lựa chọn trong mã | Ý nghĩa / đánh đổi |
+|---|---|
+| $\mathbf w[0]=\mathbf 0$; lịch sử ACC trước đầu cửa sổ bằng 0 | Bắt đầu khi chưa biết quan hệ ACC–nhiễu; các mẫu đầu phải trải qua quá trình thích nghi. |
+| $\mathbf P[0]=\mathbf I_{55}$ | Ma trận đơn vị $55\times55$, chọn thang khởi tạo bằng 1 và đối xử đồng đều các hướng hệ số. Đây là lựa chọn đồ án; paper chưa cho giá trị khởi tạo. |
+| Khởi tạo lại mỗi tầng ở mỗi cửa sổ 8 s | Các cửa sổ có trạng thái bộ lọc riêng, dễ tái lập; đổi lại không kế thừa hệ số đã học ở cửa sổ trước. |
+| Tham chiếu X → Y → Z, không đặt trễ Y/Z tường minh | Mã hiện đưa từng kênh ACC trực tiếp vào mỗi tầng. **Chi tiết này khác các khối trễ ở Hình 3**, cần ghi nhận khi đánh giá mức tái lập. |
+
+Các lựa chọn này được thể hiện trong [cascade.py](../../../src/cpc_ppg/adaptive_filters/cascade.py), [lms.py](../../../src/cpc_ppg/adaptive_filters/lms.py) và [rls.py](../../../src/cpc_ppg/adaptive_filters/rls.py); không gán chúng thành quy định của tác giả.
+
+### 9.4. Ước lượng nhịp tim sau CPC
+
+| Tham số | Giá trị đồ án | Vì sao dùng / ý nghĩa |
+|---|---|---|
+| Số điểm FFT ước lượng $N_F$ | **4096** | Theo mục 4.1. Mã đệm thêm số 0 cho đoạn 1.000 mẫu để có lưới tần số dày hơn. |
+| Dải chọn đỉnh | **0,4–3,5 Hz** | Quy ước đồ án, cùng dải quan tâm của tiền xử lý. |
+| Bán kính tìm đỉnh $\Delta_s$ | **10** vị trí FFT mỗi phía | Theo mục 4.1; tìm quanh đỉnh cửa sổ trước, giới hạn trong dải chọn đỉnh. Tương đương khoảng **±18,31 BPM** với cấu hình này. |
+| Trọng số làm mượt | **0,90 / 0,05 / 0,05** | Theo mô tả mục 3.3: ưu tiên hiện tại, bổ sung hai cửa sổ trước để giảm dao động. Mã dùng các BPM thô. |
+| Hậu xử lý dùng cửa sổ tương lai | **Tắt** trong cấu hình chính | Giữ đánh giá chính chỉ sử dụng cửa sổ hiện tại và trước đó; bước bổ sung của paper được tách riêng. |
+
+**Hai FFT có nhiệm vụ khác nhau:** 1.000 điểm để lọc phổ đầu vào; 4.096 điểm để tìm tần số nhịp tim sau CPC. Đệm số 0 làm dày lưới tính toán, **không thêm dữ liệu quan sát**: mỗi đoạn vẫn dài 8 s. Khoảng cách lưới sau CPC là $125/4096\approx0,03052$ Hz, tương đương **1,831 BPM**; đây không phải cam kết độ chính xác 1,831 BPM.
+
+Quy ước khởi động: cửa sổ đầu chọn đỉnh mạnh nhất trong dải; hai BPM đầu chưa làm mượt; khi các đỉnh bằng nhau, chọn tần số thấp hơn. Đây là các quy tắc triển khai được chốt trong [cấu hình HR](../../../src/cpc_ppg/hr/config.py), [chọn đỉnh](../../../src/cpc_ppg/hr/spectral_peak.py) và [làm mượt](../../../src/cpc_ppg/hr/postprocessing.py).
+
+### 9.5. Vì sao vẫn giữ $\lambda=0.5$ khi khảo sát cho $\lambda=0.4$ tốt hơn?
+
+Kết quả khảo sát báo cáo trong đồ án:
+
+| $\lambda$ | AAE trung bình (BPM) |
+|---|---:|
+| 0,4 | 1,280451 |
+| **0,5 — cấu hình chính** | **1,282681** |
+
+Chênh lệch chỉ **0,002230 BPM** trên tập đã khảo sát. Đồ án giữ $\lambda=0.5$ để đối chiếu cấu hình công bố; khảo sát được dùng để xem độ nhạy. Giá trị nhỏ nhất trên tập này chưa chứng minh $\lambda=0.4$ sẽ tốt nhất trên dữ liệu độc lập.
+
+### 9.6. Câu trả lời ngắn khi bảo vệ
+
+> Nhóm giữ các giá trị chính của paper để đối chiếu: LMS 0.0001 và 27, RLS 0.999 và 55, phối hợp 0.5. Những chỗ paper chưa nêu rõ, nhóm chốt quy ước: hiểu 27/55 là số hệ số, 0.999 là hệ số quên, khởi tạo trọng số bằng 0 và ma trận RLS bằng đơn vị. Các lựa chọn được giữ cố định để tái lập; nhóm chưa khẳng định chúng tối ưu và có ghi rõ các khác biệt với sơ đồ gốc.

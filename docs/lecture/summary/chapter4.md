@@ -1,4 +1,3 @@
-
 # Lecture 04 — Bộ lọc thích nghi (Adaptive Filters)
 
 **Môn học:** ET6021 — Xử lý tín hiệu số nâng cao
@@ -459,7 +458,72 @@ Trong đó:
 
 ---
 
-## 11. Các câu hỏi phản biện quan trọng
+## 11. CPC trong đồ án — Thiết kế, ký hiệu và tham số
+
+### 11.1. Nhìn toàn bộ luồng xử lý
+
+**CPC = Cascade and Parallel Combination:** nối tiếp ba tầng ANC trong mỗi nhánh, chạy song song hai nhánh LMS/RLS rồi kết hợp đầu ra.
+
+```mermaid
+flowchart LR
+    D["PPG đã tiền xử lý"] --> LX["LMS · ACC-X"]
+    LX -->|e_X| LY["LMS · ACC-Y"]
+    LY -->|e_Y| LZ["LMS · ACC-Z"]
+    D --> RX["RLS · ACC-X"]
+    RX -->|e_X| RY["RLS · ACC-Y"]
+    RY -->|e_Y| RZ["RLS · ACC-Z"]
+    LZ -->|"0.5 × e_LMS"| C["Cộng → e_CPC"]
+    RZ -->|"0.5 × e_RLS"| C
+    C --> H["Phổ → đỉnh nhịp tim → BPM"]
+```
+
+Hai nhánh nhận **cùng PPG và ACC đã tiền xử lý**. Mỗi tầng học một bộ hệ số riêng; đầu ra $e_X,e_Y$ trở thành đầu vào chính của tầng sau. ACC cần tương quan với nhiễu chuyển động và ít tương quan với nhịp tim để hạn chế trừ mất tín hiệu cần giữ.
+
+### 11.2. Ký hiệu tại một tầng ANC
+
+| Ký hiệu                             | Nghĩa trong CPC                                                                                                     |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| $n$, $M$                          | Chỉ số mẫu trong cửa sổ; số hệ số FIR của **mỗi tầng**.                                             |
+| $d[n]$                              | Đầu vào chính: PPG nhiễu ở tầng X; tín hiệu dư của tầng trước ở tầng Y/Z.                            |
+| $x[n]$, $\mathbf{x}[n]$           | Một trục ACC; vector $[x[n],\ldots,x[n-M+1]]^T$ gồm hiện tại và quá khứ.                                   |
+| $\mathbf{w}[n]$                     | $M$ hệ số học quan hệ ACC → nhiễu PPG; $T$ là phép chuyển vị.                                          |
+| $y[n]=\mathbf{w}^T[n]\mathbf{x}[n]$ | Nhiễu ước lượng để trừ khỏi $d[n]$.                                                                       |
+| $e[n]=d[n]-y[n]$                    | Tín hiệu sau trừ nhiễu, vừa làm đầu ra vừa dẫn động cập nhật.                                          |
+| $\mathbf{P}[n]$, $\mathbf{k}[n]$  | Ma trận nghịch đảo tương quan có trọng số và vector độ lợi RLS; được cập nhật/tính từ dữ liệu. |
+
+**Một mẫu:** lấy vector ACC → tính $y[n]$ → trừ được $e[n]$ → cập nhật hệ số cho mẫu kế tiếp. LMS dùng $\Delta\mathbf{w}=\mu e[n]\mathbf{x}[n]$; RLS dùng $\Delta\mathbf{w}=\mathbf{k}[n]e[n]$ (công thức đầy đủ ở mục 9).
+
+**Mục tiêu tối ưu** là giảm sai số bình phương: LMS dùng gradient tức thời của MSE; RLS dùng tổng bình phương có trọng số. $e[n]$ là tín hiệu dư, không phải bản thân hàm mục tiêu; trong ANC ta muốn giữ nhịp tim trong $e[n]$, không ép nó về 0.
+
+### 11.3. Tham số thực sự được dùng
+
+| Tham số / cấu hình                           | Giá trị trong code                               | Ý nghĩa và đánh đổi                                                                                                                                                |
+| ----------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Số hệ số $M$                               | LMS: **27**; RLS: **55**, mỗi tầng   | Nhiều hệ số cho phép mô hình hóa quan hệ có độ trễ phức tạp hơn, nhưng tăng chi phí và số hệ số phải học; không bảo đảm tốt hơn.            |
+| Bước học LMS $\mu$                         | **0.0001**                                   | Nhỏ → sửa ít, thường chậm hơn; lớn → nhanh hơn nhưng dễ dao động. Mức cập nhật còn phụ thuộc biên độ ACC và sai số.                             |
+| Hệ số quên RLS $f$                         | **0.999**                                    | Mẫu cũ cách $\ell$ bước có trọng số $f^\ell$. Gần 1 → nhớ lâu; giảm $f$ → bám thay đổi nhanh hơn nhưng nhạy dao động hơn.                    |
+| Khởi tạo RLS $P_0=\alpha I_{55}$            | $\alpha=$ **1.0**                          | Ma trận $55\times55$ quyết định độ lợi ban đầu; $I_{55}$ là ma trận đơn vị. Nếu viết $P_0=\delta^{-1}I$, ở đây $\delta=1$.                     |
+| Trạng thái ban đầu                          | $\mathbf{w}_0=\mathbf{0}$; lịch sử ACC bằng 0 | **Khởi tạo lại từng tầng, từng cửa sổ**; không truyền trạng thái thích nghi sang cửa sổ sau.                                                         |
+| Trọng số kết hợp $\lambda_{\mathrm{CPC}}$ | **0.5**                                      | $e_{\mathrm{CPC}}=\lambda_{\mathrm{CPC}}e_{\mathrm{LMS}}+(1-\lambda_{\mathrm{CPC}})e_{\mathrm{RLS}}$: phối hợp đều hai nhánh. Đây là tham số khác với $f$. |
+
+**Cách đọc cấu hình:** $M$ quyết định số hệ số cần học; $\mu$ quyết định bước sửa LMS; $f$ quyết định mức nhớ RLS; $P_0$ đặt trạng thái thông tin ban đầu; $\lambda_{\mathrm{CPC}}$ quyết định tỷ lệ trộn hai đầu ra.
+
+### 11.4. Đặt bộ lọc vào quy trình ước lượng BPM
+
+| Công đoạn            | Thiết kế của đồ án                                                                                                                                                                                                                     |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Chuẩn bị dữ liệu    | $F_s=125$ Hz; cửa sổ **8 s = 1.000 mẫu**, dịch **2 s = 250 mẫu**. Lọc từng kênh trong dải **0.4–3.5 Hz**, rồi lấy trung bình hai kênh PPG.                                                                 |
+| Khử nhiễu             | Chạy sáu tầng ANC như sơ đồ; ba tầng LMS dùng 27 hệ số/tầng, ba tầng RLS dùng 55 hệ số/tầng.                                                                                                                                |
+| Ước lượng nhịp tim | Đệm 0 lên **FFT 4.096 điểm**, chọn đỉnh trong dải nhịp tim; cửa sổ sau tìm quanh đỉnh trước **±10 bin**. $\mathrm{BPM}=60f_{\mathrm{peak}}$, với $f_{\mathrm{peak}}$ là tần số đỉnh, tính bằng Hz. |
+| Làm trơn BPM          | Trọng số **0.90 / 0.05 / 0.05** cho BPM thô hiện tại / trước một / trước hai cửa sổ; giữ nguyên hai cửa sổ đầu.                                                                                                      |
+
+**Quy ước tái dựng:** code hiểu 27/55 là *số hệ số* (bậc FIR thông thường là 26/54). Cách hiểu 0.999 là hệ số quên, $P_0=I$, khởi tạo 0 và reset theo cửa sổ là các lựa chọn tái dựng; không khẳng định đều đã được bài báo mô tả đầy đủ. Nhãn BPM tham chiếu dùng để đánh giá, không dùng cập nhật các bộ lọc.
+
+**Đối chiếu code:** [tham số LMS/RLS](../../../src/cpc_ppg/adaptive_filters/config.py), [ba tầng ANC và reset](../../../src/cpc_ppg/adaptive_filters/cascade.py), [kết hợp CPC](../../../src/cpc_ppg/adaptive_filters/cpc.py), [tiền xử lý](../../../src/cpc_ppg/preprocessing/config.py), [ước lượng BPM](../../../src/cpc_ppg/hr/config.py).
+
+---
+
+## 12. Các câu hỏi phản biện quan trọng
 
 ### Câu 1. Bộ lọc thích nghi khác bộ lọc cố định thế nào?
 
@@ -499,7 +563,7 @@ Theo cách diễn giải RLS của project, f điều chỉnh trọng số dữ 
 
 ---
 
-## 12. Checklist trước khi bảo vệ
+## 13. Checklist trước khi bảo vệ
 
 - [ ] Giải thích được nguyên lý lọc thích nghi.
 - [ ] Phân biệt y[n] và e[n].
@@ -529,4 +593,4 @@ Theo cách diễn giải RLS của project, f điều chỉnh trọng số dữ 
 
 - Slide 3–40: Nguyên lý, thống kê tín hiệu, Wiener, dự đoán tuyến tính và Steepest Descent.
 - Slide 41: LMS/NLMS và RLS được giao tự đọc.
-- Mục 8–10 và các cấu hình CPC: Kiến thức bổ sung từ đồ án và lý thuyết thuật toán, không phải nội dung công thức chi tiết được trình bày trong lecture.
+- Mục 8–11 và các cấu hình CPC: Kiến thức bổ sung từ đồ án và lý thuyết thuật toán, không phải nội dung công thức chi tiết được trình bày trong lecture.
